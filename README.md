@@ -1,8 +1,8 @@
-# Claude Code Python Starter
+# Claude Code Starter Kit
 
-A starter kit for Python projects built with [Claude Code](https://docs.claude.com/en/docs/claude-code). It contains project rules, guardrail hooks, two subagents and a `/ship` command, so every new project starts with the same plan → implement → review workflow and the same safety settings.
+A language-agnostic starter kit for projects built with [Claude Code](https://docs.claude.com/en/docs/claude-code). It gives every new project the same rules, guardrails, subagents and delivery workflow: plan → implement → independent review → human merge.
 
-Copy it into a new or existing Python project, fill in the project details in `CLAUDE.md`, and start working.
+Copy it into a new or existing project, pick your stack (examples for **Python** and **Node** below), and start working.
 
 ## What's inside
 
@@ -10,7 +10,11 @@ Copy it into a new or existing Python project, fill in the project details in `C
 .
 ├── CLAUDE.md                    # Project rules Claude reads every session
 └── .claude/
-    ├── settings.json            # Permissions and hooks (the hard rules)
+    ├── guardrails.json          # Your config: secret/protected files, blocked commands, branches, format/test commands
+    ├── settings.json            # Wires the hooks to Claude Code (rarely needs editing)
+    ├── hooks/
+    │   ├── guard.sh             # Runs before every tool call, enforces guardrails.json
+    │   └── checks.sh            # Runs the format and test commands from guardrails.json
     ├── agents/
     │   ├── implementer.md       # Writes code + tests, opens the PR
     │   └── code-reviewer.md     # Read-only reviewer, posts findings on the PR
@@ -18,49 +22,113 @@ Copy it into a new or existing Python project, fill in the project details in `C
         └── ship.md              # /ship: plan → implement → review loop → hand over
 ```
 
-`CLAUDE.md` holds the guidance: workflow, code style, git rules and AI/LLM practices. `.claude/settings.json` holds the rules that must not depend on the model remembering them, so they are enforced by permissions and hooks.
-
-## Stack assumptions
-
-- Python 3.14 managed with [uv](https://docs.astral.sh/uv/)
-- [ruff](https://docs.astral.sh/ruff/) for formatting and linting
-- [pytest](https://docs.pytest.org/) for tests
-- pydantic / pydantic-settings for data models and configuration
-- Git and GitHub, with the [`gh` CLI](https://cli.github.com/) for PRs
-
-If your project uses different tools, update the commands in `CLAUDE.md`, the agents and the hooks to match.
+- **`CLAUDE.md`** is guidance: workflow, code style, git and security rules. Claude follows it, but nothing forces it to.
+- **Hooks** are the hard rules. They are shell commands that Claude Code itself runs automatically at fixed points (before a tool runs, after a file is edited, when a subagent finishes). They run every time, whatever the prompt says. A hook that exits with code `2` blocks the action, and its message goes back to Claude.
+- **`guardrails.json`** is the one file you edit to change those rules. It's this kit's own config, not a built-in Claude Code file. The hook scripts read it on every call, so changes apply immediately, with no restart and no `settings.json` edits.
 
 ## Prerequisites
 
 - [Claude Code](https://docs.claude.com/en/docs/claude-code)
-- `uv`
-- `git` and `gh` (logged in with `gh auth login`)
-- `jq`, which the guardrail hooks use to parse tool input
+- `git` and the [`gh` CLI](https://cli.github.com/), logged in with `gh auth login`
+- `jq`, used by the hooks to read JSON (`brew install jq` / `apt install jq`)
+- Your stack's tools, e.g. [uv](https://docs.astral.sh/uv/) for Python or Node + npm
 
 ## Getting started
 
 1. **Copy the kit into your project.**
 
    ```bash
-   cp -R path/to/mhaleem-claude-starter/{CLAUDE.md,.claude} your-project/
+   cp -R path/to/claude-starter/{CLAUDE.md,.claude} your-project/
    cd your-project
+   chmod +x .claude/hooks/*.sh
    ```
 
-2. **Set up the Python project** if it doesn't exist yet:
+2. **Set up your stack** if the project is new (see [Python](#python) or [Node](#node) below).
 
-   ```bash
-   git init
-   uv init --package
-   uv add --dev pytest ruff
-   ```
+3. **Set the format and test commands** in `.claude/guardrails.json` under `commands`. Leave a command empty to skip that check.
 
-3. **Add at least one test.** The `SubagentStop` hook runs `uv run pytest -q` and blocks the hand-over if it fails. pytest exits with an error when it collects no tests, so a project without tests will block every subagent.
+4. **Fill in `CLAUDE.md`.** Replace the `<...>` placeholders under **Project**, and keep only your stack's column in the **Commands** table.
 
-4. **Fill in `CLAUDE.md`.** Replace the `<...>` placeholders under **Project** (purpose, stack, package name, entrypoint).
+5. **Add a `.env.example`** that lists the environment variable names your app needs, without values. Claude can't read `.env`, so this is how it learns which variables exist.
 
-5. **Add a `.env.example`** listing the environment variable names your app needs, without values. Claude is blocked from reading `.env`, so this is how it learns which variables exist.
+6. **Start Claude Code** in the project folder. Run `/hooks` once to confirm the hooks are loaded, then run `/ship <task>`.
 
-6. **Start Claude Code** in the project folder and run `/ship <task>`.
+## Stack examples
+
+### Python
+
+```bash
+git init
+uv init --package
+uv add --dev pytest ruff
+```
+
+`.claude/guardrails.json`:
+
+```json
+"commands": {
+  "format": "uv run ruff format . && uv run ruff check --fix .",
+  "test": "uv run pytest -q"
+}
+```
+
+Add at least one test before running subagents. pytest fails when it finds no tests, and the test check would then block every hand-over.
+
+### Node
+
+```bash
+git init
+npm init -y
+npm install -D prettier eslint vitest
+npm pkg set scripts.test="vitest run" scripts.lint="eslint ." scripts.format="prettier --write ."
+```
+
+`.claude/guardrails.json`:
+
+```json
+"commands": {
+  "format": "npm run format && npm run lint",
+  "test": "npm test"
+}
+```
+
+Use the same idea for pnpm, yarn or bun, or for other languages such as Go (`gofmt -w . && go vet ./...`, `go test ./...`) and Rust (`cargo fmt && cargo clippy`, `cargo test`).
+
+## Guardrails
+
+Everything below is set in `.claude/guardrails.json`:
+
+```json
+{
+  "secret_files": [".env", ".env.*", "*.pem", "*.key", "id_rsa*", "credentials.json"],
+  "allowed_files": [".env.example"],
+  "protected_files": ["uv.lock", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+                      ".claude/settings.json", ".claude/guardrails.json", ".claude/hooks/*"],
+  "blocked_commands": ["rm -rf", "rm -fr", "git reset --hard", "git clean -f", "git branch -D"],
+  "protected_branches": ["main", "master"],
+  "block_force_push": true,
+  "commands": { "format": "", "test": "" }
+}
+```
+
+| Key | What it does |
+|-----|--------------|
+| `secret_files` | Glob patterns Claude can't read, edit, search or mention in a shell command (e.g. `cat .env`) |
+| `allowed_files` | Exceptions to the two file lists, e.g. `.env.example` |
+| `protected_files` | Glob patterns Claude can read but not edit. Lockfiles and the guardrail files are included so Claude can't loosen its own rules |
+| `blocked_commands` | Plain-text fragments; any shell command that contains one is blocked |
+| `protected_branches` | Blocks `git push` while you're on one of these branches, pushes that target one (`origin main`, `HEAD:main`) and `--all` / `--mirror` |
+| `block_force_push` | Blocks `-f`, `--force`, `--force-with-lease` and `+refspec` pushes |
+| `commands.format` | Runs after every file edit. If it fails, its output goes back to Claude to fix |
+| `commands.test` | Runs when a subagent finishes. If tests fail, the subagent has to fix them before handing over |
+
+**Patterns:** file patterns are shell globs, matched against both the project-relative path (`.claude/hooks/*`) and the file name (`*.key`). Command patterns are plain text, and repeated spaces are collapsed before matching.
+
+**Changing the rules:** edit `guardrails.json` yourself, in your editor. It's protected, so Claude will refuse to change it and will ask you instead.
+
+**Fails closed:** if `jq` or `guardrails.json` is missing, or the JSON is invalid, `guard.sh` blocks every tool call and says why. The format and test checks only warn in that case, so a broken config can't trap a subagent in a loop.
+
+**Limits:** these guardrails catch mistakes; they are not a security boundary. A determined command can get around text matching (for example `rm -r -f`, or `grep -r KEY .` reading `.env` indirectly). Keep real secrets out of the repo, and review the PRs.
 
 ## The workflow
 
@@ -75,18 +143,14 @@ The kit separates the agent that writes code from the agent that approves it.
 
 ### `/ship <task>`
 
-The `/ship` command runs the whole flow:
-
 1. **Plan.** Claude proposes an approach, the files to change and the tests, then waits for your approval.
 2. **Implement.** `implementer` builds it on a `feat/...` or `fix/...` branch and opens a PR.
 3. **Review loop**, at most 3 rounds:
-   - `code-reviewer` reviews the PR and posts a verdict: **Approve**, **Approve with minor changes** or **Changes required**.
+   - `code-reviewer` reviews and posts a verdict: **Approve**, **Approve with minor changes** or **Changes required**.
    - On **Changes required** (any open High or Medium finding), `implementer` fixes the findings and pushes.
    - The next review re-checks every earlier finding and reviews the new commits.
    - If round 3 still ends in **Changes required**, Claude stops and reports the open findings to you.
 4. **Hand over.** You get the PR link, the number of rounds, the fixes made in each round, any remaining Low findings and the test and lint status. Claude never merges.
-
-Example:
 
 ```
 /ship Add a /health endpoint that returns the app version
@@ -94,33 +158,13 @@ Example:
 
 You can also call the agents directly, for example: *"Use the code-reviewer agent to review PR #12."*
 
-## Guardrails
-
-These live in `.claude/settings.json` and run every time, whatever the prompt says.
-
-### Permissions
-
-| Rule | Effect |
-|------|--------|
-| `deny: Read/Edit(.env, .env.*)` | Claude cannot read or change secrets files |
-
-### Hooks
-
-| Hook | Trigger | What it does |
-|------|---------|--------------|
-| `PreToolUse` | Bash | Blocks `rm -rf`, `git push --force` and pushes to `main`/`master` |
-| `PreToolUse` | Edit / Write | Blocks edits to `.env` and `uv.lock` |
-| `PostToolUse` | Edit / Write | Runs `ruff format` and `ruff check --fix` after every file change |
-| `SubagentStop` | Any subagent finishing | Runs `pytest -q`; if tests fail, the subagent has to fix them before handing over |
-
-A hook that exits with code `2` blocks the action, and its message goes back to Claude so it can change course.
-
 ## Customizing
 
-- **Project rules:** edit `CLAUDE.md`. Keep it short; long instruction files are followed less reliably.
-- **Agent behavior:** edit `.claude/agents/*.md`. The frontmatter sets each agent's tools, model and effort. The reviewer has no `Edit`/`Write` tools, which keeps it read-only.
-- **More commands:** add a Markdown file to `.claude/commands/`. The file name becomes the slash command, and `$ARGUMENTS` holds whatever you type after it.
-- **More guardrails:** add hooks or permission rules to `.claude/settings.json`. Put personal, machine-specific overrides in `.claude/settings.local.json` and keep that file out of git.
+- **Rules:** edit `.claude/guardrails.json`.
+- **Project guidance:** edit `CLAUDE.md`. Keep it short; long instruction files are followed less reliably.
+- **Agents:** edit `.claude/agents/*.md`. The frontmatter sets each agent's tools, model and effort. The reviewer has no `Edit`/`Write` tools, which keeps it read-only.
+- **Commands:** add a Markdown file to `.claude/commands/`. The file name becomes the slash command, and `$ARGUMENTS` holds whatever you type after it.
+- **Hook wiring:** `.claude/settings.json` connects the scripts to Claude Code's hook events. You only need to touch it to add a new kind of hook. Put personal, machine-specific overrides in `.claude/settings.local.json` and keep that file out of git.
 
 ## Principles
 

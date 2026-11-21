@@ -1,0 +1,29 @@
+{
+  "secret_files": [".env", ".env.*", "*.pem", "*.key", "id_rsa*", "credentials.json"],
+  "allowed_files": [".env.example"],
+  "protected_files": [
+    "uv.lock",
+    "poetry.lock",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lockb",
+    ".claude/settings.json",
+    ".claude/guardrails.json",
+    ".claude/hooks/*"
+  ],
+  "blocked_commands": [
+    "rm -rf",
+    "rm -fr",
+    "git reset --hard",
+    "git clean -f",
+    "git branch -D",
+    "chmod -R 777"
+  ],
+  "protected_branches": ["main", "master"],
+  "block_force_push": true,
+  "commands": {
+    "format": "uv run ruff format .",
+    "test": "uv run pytest -q"
+  }
+}

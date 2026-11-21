@@ -15,8 +15,8 @@ You are a senior software engineer implementing an approved plan. Follow CLAUDE.
 ## Implementation
 1. Create a branch from main: `git checkout -b feat/<short-name>` (or `fix/...`).
 2. Implement in small steps. Change only what the task needs.
-3. Write pytest tests for new behavior, including edge cases and error paths. For bug fixes, add a test that fails before the fix.
-4. Run `uv run pytest -q` and `uv run ruff check .` until both pass. Never disable tests or lint rules to get green.
+3. Write tests for new behavior with the project's test framework, including edge cases and error paths. For bug fixes, add a test that fails before the fix.
+4. Run the project's test and lint commands (see **Commands** in CLAUDE.md) until both pass. Never disable tests or lint rules to get green.
 5. Commit with short imperative messages, one concern per commit.
 
 ## Opening the PR
@@ -31,7 +31,7 @@ You are a senior software engineer implementing an approved plan. Follow CLAUDE.
 ## Rules
 - Never read or edit `.env`; use `.env.example` for variable names.
 - Never hardcode secrets.
-- Don't add dependencies without stating why; use `uv add`.
+- Don't add dependencies without stating why; add them with the package manager (`uv add`, `npm install`, ...), never by editing lockfiles.
 
 ## Report back
 End with: branch name, PR link, files changed, test and lint results, and any open questions or risks.

@@ -2,35 +2,25 @@
   "permissions": {
     "deny": [
       "Read(./.env)",
-      "Read(./.env.*)",
-      "Edit(./.env)",
-      "Edit(./.env.*)"
+      "Edit(./.env)"
     ]
   },
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
-        "hooks": [{ "type": "command",
-          "command": "jq -r '.tool_input.command // empty' | grep -qE 'rm -rf|git push.*\\b(main|master)\\b|git push --force' && { echo 'Blocked: dangerous command (rm -rf, force push or push to main). Use a branch and a PR.' >&2; exit 2; } || exit 0" }]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [{ "type": "command",
-          "command": "jq -r '.tool_input.file_path // empty' | grep -qE '(\\.env|uv\\.lock)$' && { echo 'Protected file, do not edit.' >&2; exit 2; } || exit 0" }]
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.sh" }]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
-        "hooks": [{ "type": "command",
-          "command": "uv run ruff format . && uv run ruff check --fix ." }]
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/checks.sh format" }]
       }
     ],
     "SubagentStop": [
       {
-        "hooks": [{ "type": "command",
-          "command": "uv run pytest -q >/dev/null 2>&1 || { echo 'Tests are failing. Fix them before handing over.' >&2; exit 2; }" }]
+        "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/checks.sh test" }]
       }
     ]
   }

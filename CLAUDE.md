@@ -1,27 +1,31 @@
 # CLAUDE.md
 
-Base rules for this project. Keep this file short and current. Hard rules (secrets, dangerous commands, tests) are enforced in `.claude/settings.json` through permissions and hooks; this file is guidance.
+Base rules for this project. Keep this file short and current. Hard rules (secrets, dangerous commands, protected files and branches, format and test checks) are enforced by hooks configured in `.claude/guardrails.json`; this file is guidance.
 
 ## Project
 
 - **What it is:** <one or two sentences: purpose, users, main features>
-- **Stack:** Python 3.14, uv, <FastAPI / pandas / ...>
+- **Stack:** <language, package manager, framework>, e.g. `Python 3.14, uv, FastAPI` or `Node 22, npm, TypeScript, Express`
 - **Structure:**
-  - `src/<package>/` application code
-  - `tests/` pytest tests, mirroring `src/`
-  - `.claude/` settings, hooks and subagents
+  - `src/` application code
+  - `tests/` tests, mirroring `src/`
+  - `.claude/` settings, guardrails, hooks, subagents and commands
 
 ## Commands
 
-```bash
-uv sync                      # install dependencies
-uv add <pkg>                 # add a dependency (never edit uv.lock by hand)
-uv add --dev <pkg>           # add a dev dependency
-uv run pytest -q             # run tests
-uv run ruff format .         # format
-uv run ruff check --fix .    # lint
-uv run <entrypoint>          # run the app
-```
+Keep the column for this project's stack and delete the other. The format and test commands must match `commands` in `.claude/guardrails.json`.
+
+| Task | Python (uv) | Node (npm) |
+|------|-------------|------------|
+| Install | `uv sync` | `npm install` |
+| Add dependency | `uv add <pkg>` | `npm install <pkg>` |
+| Add dev dependency | `uv add --dev <pkg>` | `npm install -D <pkg>` |
+| Test | `uv run pytest -q` | `npm test` |
+| Format | `uv run ruff format .` | `npx prettier --write .` |
+| Lint | `uv run ruff check --fix .` | `npx eslint --fix .` |
+| Run | `uv run <entrypoint>` | `npm start` |
+
+Never edit lockfiles (`uv.lock`, `package-lock.json`, `pnpm-lock.yaml`, ...) by hand; use the package manager.
 
 ## Workflow
 
@@ -52,12 +56,13 @@ Standard flow:
 
 ## Code style
 
-- Type hints on all functions; pydantic models for structured data and settings.
 - Small, focused functions with clear names. Prefer readability over cleverness.
 - No dead code, no commented-out code, no unused imports.
-- Handle errors explicitly; no bare `except`. Log useful context.
-- Docstrings for public functions only when the name isn't enough.
+- Handle errors explicitly; never swallow them silently. Log useful context.
+- Document public functions only when the name isn't enough.
 - Follow existing patterns in the codebase before introducing new ones.
+- **Python:** type hints on all functions; pydantic models for structured data and settings; no bare `except`.
+- **Node / TypeScript:** TypeScript in strict mode, no `any`; validate external data with a schema library such as zod; no unhandled promise rejections.
 
 ## Git
 
@@ -69,7 +74,7 @@ Standard flow:
 ## Security and secrets
 
 - Never read, print or edit `.env`. Use `.env.example` to see which variables exist.
-- Read configuration from environment variables (pydantic-settings), never hardcode keys.
+- Read configuration from environment variables through a validated settings module (pydantic-settings, zod, ...), never hardcode keys.
 - Never put secrets, tokens or personal data in code, tests, logs, commits or PR comments.
 - Validate all external input.
 
@@ -86,4 +91,4 @@ Standard flow:
 - Don't add dependencies without saying why.
 - Don't change unrelated files.
 - Don't disable tests or lint rules to make something pass.
-- Don't edit `uv.lock`, `.env`, or files in `.claude/` unless asked.
+- Don't edit lockfiles, `.env`, or files in `.claude/` unless asked.
