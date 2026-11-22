@@ -1,94 +1,94 @@
 # CLAUDE.md
 
-Base rules for this project. Keep this file short and current. Hard rules (secrets, dangerous commands, protected files and branches, format and test checks) are enforced by hooks configured in `.claude/guardrails.json`; this file is guidance.
+Guidance for working on **this repository**: an open-source starter kit of best practices for using Claude Code in real projects. The kit itself lives in `src/` and is meant to be copied into other projects. Nothing in `src/` is application code.
 
-## Project
+## What the kit gives a project
 
-- **What it is:** <one or two sentences: purpose, users, main features>
-- **Stack:** <language, package manager, framework>, e.g. `Python 3.14, uv, FastAPI` or `Node 22, npm, TypeScript, Express`
-- **Structure:**
-  - `src/` application code
-  - `tests/` tests, mirroring `src/`
-  - `.claude/` settings, guardrails, hooks, subagents and commands
+- **Guidance** (`CLAUDE.md`): workflow, code style, git, security and AI-code rules that Claude follows.
+- **Hard guardrails** (hooks plus `guardrails.json`): secret files, protected files, blocked commands, protected branches and force pushes are blocked. Format runs after every edit and tests run when a subagent finishes.
+- **Deny rules** (`settings.json`): `.env` is denied at the permission level as well, so there's a second layer behind the hook.
+- **A two-agent flow**: `implementer` writes the code, `code-reviewer` reviews it read-only, and the `/ship` command loops between them until the review is clean. A human merges.
 
-## Commands
+## Repo layout
 
-Keep the column for this project's stack and delete the other. The format and test commands must match `commands` in `.claude/guardrails.json`.
+- `src/`: the kit. Everything in it is copied into target projects.
+- `install.sh`: `./install.sh [--force] <project-path>` copies every file under `src/` into the project. Existing files are skipped unless you pass `--force`, and the hooks are made executable. It copies whatever is in `src/`, so new kit files need no script change. Don't put anything in `src/` that shouldn't ship.
+- `README.md`: user-facing docs. `CLAUDE.md` (this file): contributor guidance. Neither one is copied.
 
-| Task | Python (uv) | Node (npm) |
-|------|-------------|------------|
-| Install | `uv sync` | `npm install` |
-| Add dependency | `uv add <pkg>` | `npm install <pkg>` |
-| Add dev dependency | `uv add --dev <pkg>` | `npm install -D <pkg>` |
-| Test | `uv run pytest -q` | `npm test` |
-| Format | `uv run ruff format .` | `npx prettier --write .` |
-| Lint | `uv run ruff check --fix .` | `npx eslint --fix .` |
-| Run | `uv run <entrypoint>` | `npm start` |
+## Layout of `src/`
 
-Never edit lockfiles (`uv.lock`, `package-lock.json`, `pnpm-lock.yaml`, ...) by hand; use the package manager.
+```
+src/
+├── CLAUDE.md                   # Template project rules, copied into the target project (has <...> placeholders)
+└── .claude/
+    ├── settings.json           # Permission deny rules + wiring of the 3 hooks to Claude Code events
+    ├── guardrails.json         # The one config file users edit per project
+    ├── hooks/
+    │   ├── guard.sh            # PreToolUse: enforces guardrails.json, exit 2 blocks the call
+    │   └── checks.sh           # Runs commands.format (PostToolUse) or commands.test (SubagentStop)
+    ├── agents/
+    │   ├── implementer.md      # Branch, code + tests, test/lint, commit, open PR, fix review findings
+    │   └── code-reviewer.md    # Read-only: reviews the PR diff, posts ranked findings and a verdict
+    └── commands/
+        └── ship.md             # /ship <task>: plan → implement → review loop (max 3 rounds) → hand over
+```
 
-## Workflow
+### The 3 hooks (`src/.claude/settings.json`)
 
-1. **Plan first.** For any non-trivial task, propose a short plan (approach, files to change, tests) and wait for approval before writing code.
-2. **Small steps.** Implement in small, reviewable increments. One concern per commit.
-3. **Tests with every change.** New behavior needs a test; bug fixes need a test that fails before the fix.
-4. **Verify before saying done.** Run tests and lint, and report the result honestly. Never claim something works without running it.
-5. **Ask when unclear.** If requirements are ambiguous, ask instead of guessing.
+| Event | Matcher | Script | Purpose |
+|-------|---------|--------|---------|
+| `PreToolUse` | `Bash\|Read\|Grep\|Glob\|Edit\|Write\|MultiEdit\|NotebookEdit` | `guard.sh` | Block secrets, protected-file edits, blocked commands, pushes to protected branches, force pushes |
+| `PostToolUse` | `Edit\|Write\|MultiEdit` | `checks.sh format` | Run the project's formatter/linter and feed failures back to Claude |
+| `SubagentStop` | (all) | `checks.sh test` | Run tests before a subagent may hand over |
 
-## Subagents
+### `guardrails.json` keys
 
-Work is split so the agent that writes code is never the one that approves it.
+`secret_files`, `allowed_files`, `protected_files`, `blocked_commands`, `protected_branches`, `block_force_push`, `commands.format`, `commands.test`. The full table is in `README.md` under **Guardrails**.
 
-- **Main session (orchestrator):** plans with the user, delegates to subagents, reports results. Does not skip the review step.
-- **`implementer`:** writes code and tests on a feature branch, runs tests and lint, commits, opens the PR.
-- **`code-reviewer`:** read-only. Reviews the PR diff (`git diff main...HEAD`) and posts findings ranked by severity. Never edits code.
+## Invariants: keep these in sync
 
-Standard flow:
-1. Orchestrator agrees the plan with the user.
-2. `implementer` builds it on a branch and opens a PR.
-3. **Review loop:**
-   - `code-reviewer` reviews and posts findings.
-   - If any high or medium finding is open, `implementer` fixes them and pushes.
-   - `code-reviewer` reviews again, checking every previous finding and the new changes.
-   - Repeat until the verdict has no open high or medium findings.
-   - Maximum 3 review rounds. If issues remain after round 3, stop and report to the user with the open findings instead of continuing.
-4. The user does the final review and merges.
+A change to one of these files usually means a change to another.
 
-## Code style
+- **Tool names:** the `PreToolUse` matcher in `settings.json` and the `case` on `tool_name` at the end of `guard.sh` must cover the same tools.
+- **Config keys:** a key added, renamed or removed in `guardrails.json` has to change in `guard.sh`/`checks.sh` and in the README **Guardrails** table.
+- **Commands:** the default `commands` in `guardrails.json` have to match the Python column of the **Commands** table in `src/CLAUDE.md`.
+- **Review flow:** the loop rules (verdict names, High/Medium/Low severity, max 3 rounds, human merges) are written down in four places: `src/CLAUDE.md` **Subagents**, `code-reviewer.md` **Output**, `ship.md`, and README **The workflow**. Change all four together.
+- **Self-protection:** `protected_files` must always include `.claude/settings.json`, `.claude/guardrails.json` and `.claude/hooks/*`, so Claude can't loosen its own rules.
+- **Reviewer stays read-only:** `code-reviewer.md` must never get `Edit`, `Write` or `NotebookEdit` in `tools`.
+- **README tree and install steps:** the README tree and **Getting started** must match `src/` and how `install.sh` behaves (its flags, what gets skipped).
 
-- Small, focused functions with clear names. Prefer readability over cleverness.
-- No dead code, no commented-out code, no unused imports.
-- Handle errors explicitly; never swallow them silently. Log useful context.
-- Document public functions only when the name isn't enough.
-- Follow existing patterns in the codebase before introducing new ones.
-- **Python:** type hints on all functions; pydantic models for structured data and settings; no bare `except`.
-- **Node / TypeScript:** TypeScript in strict mode, no `any`; validate external data with a schema library such as zod; no unhandled promise rejections.
+## Hook script conventions
+
+- Bash plus `jq` only. No other runtimes or dependencies. Keep the scripts compatible with macOS's default bash 3.2: no associative arrays, no `${var,,}`, no `mapfile`.
+- Exit `2` with a message on stderr blocks the action and sends that message to Claude. Messages say what was blocked and what to do instead.
+- `guard.sh` **fails closed**: if `jq` or the config is missing, or the config is invalid, every call is blocked. `checks.sh` exits `1` (non-blocking) on a broken config, so a subagent can't get stuck in a loop. Keep this asymmetry.
+- `set -f` in `guard.sh` is deliberate. Config patterns are glob-matched and must never expand against the filesystem.
+- Language-agnostic: an empty `commands.format`/`commands.test` is a no-op. Never hardcode a stack in the scripts.
+- The guardrails catch mistakes; they aren't a security boundary. Don't make them sound stronger than that in the docs.
+
+## Testing hook changes
+
+The kit's settings sit in `src/.claude/`, not the repo root, so they are **not active** while you work on this repo. Test the hooks by piping a tool-call JSON into them:
+
+```bash
+cd src
+echo '{"tool_name":"Read","tool_input":{"file_path":".env"}}' \
+  | CLAUDE_PROJECT_DIR=$PWD .claude/hooks/guard.sh; echo "exit=$?"   # expect 2
+echo '{"tool_name":"Bash","tool_input":{"command":"git push --force origin feat/x"}}' \
+  | CLAUDE_PROJECT_DIR=$PWD .claude/hooks/guard.sh; echo "exit=$?"   # expect 2
+echo '{"tool_name":"Read","tool_input":{"file_path":"README.md"}}' \
+  | CLAUDE_PROJECT_DIR=$PWD .claude/hooks/guard.sh; echo "exit=$?"   # expect 0
+```
+
+For every behavior change, check one case that should be blocked and one that should pass. Run `shellcheck` on the scripts if it's installed, and keep them executable (`chmod +x`).
+
+## Writing style for kit files
+
+- `src/CLAUDE.md` and the agent files are prompts that land in other people's projects. Keep them short, direct and generic, with no project-specific details beyond the `<...>` placeholders.
+- Keep Python and Node as the two worked examples. Other stacks go in the README as one-line hints.
+- Plain, concrete language. No marketing tone.
 
 ## Git
 
-- Never commit to or push `main` directly. Use branches: `feat/...`, `fix/...`, `chore/...`.
-- Commit messages: short imperative summary, e.g. `Add monthly revenue endpoint`.
-- Open PRs with `gh pr create` and a description of what changed, why, and how it was tested.
-- Never force-push.
-
-## Security and secrets
-
-- Never read, print or edit `.env`. Use `.env.example` to see which variables exist.
-- Read configuration from environment variables through a validated settings module (pydantic-settings, zod, ...), never hardcode keys.
-- Never put secrets, tokens or personal data in code, tests, logs, commits or PR comments.
-- Validate all external input.
-
-## AI / LLM code (when relevant)
-
-- Keep prompts in versioned files or constants, not scattered inline.
-- Use structured outputs with schemas and validate every model response.
-- Add timeouts, retries with backoff, and clear error handling around model calls.
-- Log token usage and latency; never log secrets or full personal data.
-- Every AI feature needs a small eval set and a test that runs against it.
-
-## Don'ts
-
-- Don't add dependencies without saying why.
-- Don't change unrelated files.
-- Don't disable tests or lint rules to make something pass.
-- Don't edit lockfiles, `.env`, or files in `.claude/` unless asked.
+- Work on branches (`feat/...`, `fix/...`, `docs/...`) and open PRs. Don't push to `main` directly.
+- One concern per commit, with a short imperative message.

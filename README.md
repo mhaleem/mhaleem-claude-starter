@@ -2,25 +2,30 @@
 
 A language-agnostic starter kit for projects built with [Claude Code](https://docs.claude.com/en/docs/claude-code). It gives every new project the same rules, guardrails, subagents and delivery workflow: plan → implement → independent review → human merge.
 
-Copy it into a new or existing project, pick your stack (examples for **Python** and **Node** below), and start working.
+Install it into a new or existing project with one command, pick your stack (examples for **Python** and **Node** below), and start working.
 
 ## What's inside
 
 ```
 .
-├── CLAUDE.md                    # Project rules Claude reads every session
-└── .claude/
-    ├── guardrails.json          # Your config: secret/protected files, blocked commands, branches, format/test commands
-    ├── settings.json            # Wires the hooks to Claude Code (rarely needs editing)
-    ├── hooks/
-    │   ├── guard.sh             # Runs before every tool call, enforces guardrails.json
-    │   └── checks.sh            # Runs the format and test commands from guardrails.json
-    ├── agents/
-    │   ├── implementer.md       # Writes code + tests, opens the PR
-    │   └── code-reviewer.md     # Read-only reviewer, posts findings on the PR
-    └── commands/
-        └── ship.md              # /ship: plan → implement → review loop → hand over
+├── install.sh                   # Copies the kit into a project: ./install.sh <project-path>
+├── CLAUDE.md                    # Rules for contributing to this repo (not copied)
+└── src/                         # The kit: everything here is copied into your project
+    ├── CLAUDE.md                # Project rules Claude reads every session
+    └── .claude/
+        ├── guardrails.json      # Your config: secret/protected files, blocked commands, branches, format/test commands
+        ├── settings.json        # Deny rules + wires the hooks to Claude Code (rarely needs editing)
+        ├── hooks/
+        │   ├── guard.sh         # Runs before every tool call, enforces guardrails.json
+        │   └── checks.sh        # Runs the format and test commands from guardrails.json
+        ├── agents/
+        │   ├── implementer.md   # Writes code + tests, opens the PR
+        │   └── code-reviewer.md # Read-only reviewer, posts findings on the PR
+        └── commands/
+            └── ship.md          # /ship: plan → implement → review loop → hand over
 ```
+
+Paths in the rest of this README (`CLAUDE.md`, `.claude/...`) refer to the copies in your project.
 
 - **`CLAUDE.md`** is guidance: workflow, code style, git and security rules. Claude follows it, but nothing forces it to.
 - **Hooks** are the hard rules. They are shell commands that Claude Code itself runs automatically at fixed points (before a tool runs, after a file is edited, when a subagent finishes). They run every time, whatever the prompt says. A hook that exits with code `2` blocks the action, and its message goes back to Claude.
@@ -35,13 +40,22 @@ Copy it into a new or existing project, pick your stack (examples for **Python**
 
 ## Getting started
 
-1. **Copy the kit into your project.**
+1. **Install the kit into your project.**
 
    ```bash
-   cp -R path/to/claude-starter/{CLAUDE.md,.claude} your-project/
-   cd your-project
-   chmod +x .claude/hooks/*.sh
+   git clone https://github.com/mhaleem/mhaleem-claude-starter.git
+   ./mhaleem-claude-starter/install.sh path/to/your-project
    ```
+
+   The script copies `src/CLAUDE.md` and `src/.claude/` into the project and makes the hooks executable. Files that already exist are skipped and listed, so your own `CLAUDE.md` or `settings.json` is never overwritten by accident. Pass `--force` to overwrite them:
+
+   ```bash
+   ./mhaleem-claude-starter/install.sh --force path/to/your-project
+   ```
+
+   If you skipped an existing file, merge the kit's version into it by hand. For example, add the `hooks` and `permissions` blocks to your own `.claude/settings.json`.
+
+   To update the kit in a project later, run the script again with `--force`. Back up your edited `guardrails.json` and `CLAUDE.md` first, because those get overwritten too.
 
 2. **Set up your stack** if the project is new (see [Python](#python) or [Node](#node) below).
 
@@ -174,3 +188,7 @@ You can also call the agents directly, for example: *"Use the code-reviewer agen
 - The author never approves their own code.
 - Keep secrets out of reach. `.env` is off-limits and config comes from environment variables.
 - A human makes the final call and does the merge.
+
+## Contributing
+
+The kit lives in `src/`, and `install.sh` copies it into projects. The root `CLAUDE.md` describes how the pieces fit together, which files have to stay in sync, and how to test hook changes. Read it before opening a PR.
